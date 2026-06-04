@@ -112,7 +112,7 @@ export function EditForm({ initial = "", onSubmit }: Props) {
             onAction={openExternally}
           />
           <Action
-            title="Reformat (Pretty)"
+            title="Reformat (pretty)"
             icon={Icon.Wand}
             shortcut={{ modifiers: ["cmd", "shift"], key: "f" }}
             onAction={reformat}

@@ -197,11 +197,11 @@ function LineItem({
           <Action title="Drill into Line" icon={Icon.ArrowRightCircle} onAction={onDrillIn} />
           {flatNotSupportedAction}
           <Action
-              title="Edit Input"
-              icon={Icon.Pencil}
-              shortcut={{ modifiers: ["cmd"], key: "e" }}
-              onAction={onEditRequest}
-            />
+            title="Edit Input"
+            icon={Icon.Pencil}
+            shortcut={{ modifiers: ["cmd"], key: "e" }}
+            onAction={onEditRequest}
+          />
           <Action.CopyToClipboard
             title="Copy Line (pretty)"
             content={pretty(root.value)}

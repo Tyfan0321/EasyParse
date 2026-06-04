@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Auto-format staged TS/TSX files via `ray lint --fix`, then re-stage the
+# formatted versions and block the commit if anything is still unfixable.
+#
+# Activated by `npm run prepare` (which runs on `npm install`), which sets
+# `git config core.hooksPath .githooks`. To enable manually:
+#     git config core.hooksPath .githooks
+#
+# To bypass once: `git commit --no-verify`.
+
+set -e
+
+# Nothing to do unless something TS/TSX is staged
+STAGED=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(ts|tsx|js|jsx)$' || true)
+if [ -z "$STAGED" ]; then
+  exit 0
+fi
+
+echo "→ pre-commit: running ray lint --fix"
+npm run --silent fix-lint > /dev/null 2>&1 || true
+
+# Re-stage files that were originally staged (so any prettier auto-fixes land in this commit)
+echo "$STAGED" | xargs git add
+
+# Final gate: if lint still has hard errors, refuse the commit
+if ! npm run --silent lint > /dev/null 2>&1; then
+  echo ""
+  echo "✗ lint still failing after auto-fix — run 'npm run lint' and fix manually"
+  echo "  (use 'git commit --no-verify' to bypass once)"
+  exit 1
+fi
+
+echo "✓ pre-commit lint clean"

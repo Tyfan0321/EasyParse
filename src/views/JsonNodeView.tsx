@@ -359,7 +359,9 @@ function renderFold(value: unknown, maxDepth: number | undefined, currentDepth: 
     if (maxDepth !== undefined && currentDepth >= maxDepth) {
       return `{ /* ${keys.length} key${keys.length === 1 ? "" : "s"} */ }`;
     }
-    const parts = keys.map((k) => `${JSON.stringify(k)}: ${indentRest(renderFold(obj[k], maxDepth, currentDepth + 1))}`);
+    const parts = keys.map(
+      (k) => `${JSON.stringify(k)}: ${indentRest(renderFold(obj[k], maxDepth, currentDepth + 1))}`,
+    );
     return `{\n  ${parts.join(",\n  ")}\n}`;
   }
   return JSON.stringify(value, null, 2);

@@ -69,7 +69,12 @@ export function ErrorView({
       navigationTitle="Easy Parse — Error"
       actions={
         <ActionPanel>
-          <Action title="Edit Input" icon={Icon.Pencil} onAction={onEditRequest} />
+          <Action
+            title="Edit Input"
+            icon={Icon.Pencil}
+            shortcut={{ modifiers: ["cmd"], key: "e" }}
+            onAction={onEditRequest}
+          />
           {!triedRepair && (
             <Action
               title="Try Lenient Repair"

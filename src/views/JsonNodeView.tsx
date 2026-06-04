@@ -139,11 +139,17 @@ function NodeActions({
               node={flatTarget}
               pathStr={formatPath(flatTarget.path, pathStyle)}
               navigationTitle={`Flat · ${formatPath(flatTarget.path, pathStyle) || "$"}`}
+              onEditRequest={ctx.onEditRequest}
             />,
           )
         }
       />
-      <Action title="Edit Input" icon={Icon.Pencil} onAction={ctx.onEditRequest} />
+      <Action
+        title="Edit Input"
+        icon={Icon.Pencil}
+        shortcut={{ modifiers: ["cmd"], key: "e" }}
+        onAction={ctx.onEditRequest}
+      />
       <Action.CopyToClipboard
         title="Copy Pretty"
         content={pretty(node.value)}
@@ -212,10 +218,12 @@ function FlatJsonDetail({
   node,
   pathStr,
   navigationTitle,
+  onEditRequest,
 }: {
   node: ParsedNode;
   pathStr: string;
   navigationTitle: string;
+  onEditRequest?: () => void;
 }) {
   const { pop } = useNavigation();
   const { markdown, fullPretty } = useMemo(() => {
@@ -245,6 +253,14 @@ function FlatJsonDetail({
       navigationTitle={navigationTitle}
       actions={
         <ActionPanel>
+          {onEditRequest && (
+            <Action
+              title="Edit Input"
+              icon={Icon.Pencil}
+              shortcut={{ modifiers: ["cmd"], key: "e" }}
+              onAction={onEditRequest}
+            />
+          )}
           <Action.CopyToClipboard title="Copy Full Pretty" content={fullPretty} />
           <Action
             title="Back to List View"

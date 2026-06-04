@@ -75,14 +75,12 @@ export function ErrorView({
             shortcut={{ modifiers: ["cmd"], key: "e" }}
             onAction={onEditRequest}
           />
-          {!triedRepair && (
-            <Action
-              title="Try Lenient Repair"
-              icon={Icon.BandAid}
-              shortcut={{ modifiers: ["cmd"], key: "r" }}
-              onAction={onRepairToggle}
-            />
-          )}
+          <Action
+            title={repair ? "Disable Lenient Repair" : "Try Lenient Repair"}
+            icon={repair ? Icon.XMarkCircle : Icon.BandAid}
+            shortcut={{ modifiers: ["cmd"], key: "r" }}
+            onAction={onRepairToggle}
+          />
           <Action
             title="Re-read Input Source"
             icon={Icon.ArrowClockwise}
@@ -95,14 +93,6 @@ export function ErrorView({
             onSelectEntry={onSelectEntry}
             onAfterClear={onAfterHistoryCleared}
           />
-          {repair && (
-            <Action
-              title="Disable Lenient Repair"
-              icon={Icon.XMarkCircle}
-              shortcut={{ modifiers: ["cmd"], key: "r" }}
-              onAction={onRepairToggle}
-            />
-          )}
           <Action.CopyToClipboard
             title="Copy Raw Input"
             content={rawInput}

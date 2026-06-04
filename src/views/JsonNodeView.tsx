@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Action, ActionPanel, Color, Detail, Icon, List, useNavigation, getPreferenceValues } from "@raycast/api";
 import { ParsedNode, PathStyle, Preferences } from "../types";
 import { getChildren, previewValue } from "../lib/tree";
@@ -226,12 +226,18 @@ function FlatJsonDetail({
   onEditRequest?: () => void;
 }) {
   const { pop } = useNavigation();
+  const isContainer = node.kind === "object" || node.kind === "array";
+  const valueMaxDepth = useMemo(() => (isContainer ? maxDepthOf(node.value) : 0), [node.value, isContainer]);
+  // undefined = fully expanded; n = render only the first n container levels.
+  const [foldDepth, setFoldDepth] = useState<number | undefined>(undefined);
+  const effectiveDepth = foldDepth ?? valueMaxDepth;
+
   const { markdown, fullPretty } = useMemo(() => {
-    const meta =
-      node.kind === "object" || node.kind === "array"
-        ? `\`${node.kind}\` · ${node.childCount} ${node.kind === "array" ? "items" : "keys"}`
-        : `\`${node.kind}\``;
-    const header = `**${pathStr || "$"}** · ${meta}`;
+    const meta = isContainer
+      ? `\`${node.kind}\` · ${node.childCount} ${node.kind === "array" ? "items" : "keys"}`
+      : `\`${node.kind}\``;
+    const foldHint = isContainer && valueMaxDepth > 1 ? ` · fold ${effectiveDepth}/${valueMaxDepth}` : "";
+    const header = `**${pathStr || "$"}** · ${meta}${foldHint}`;
     if (node.kind === "string") {
       const s = node.value as string;
       const { text, truncated } = truncateForPreview(s, FLAT_VIEW_LIMIT);
@@ -240,12 +246,15 @@ function FlatJsonDetail({
         fullPretty: s,
       };
     }
-    const shallow = shallowPretty(node.value, FLAT_VIEW_LIMIT);
+    const folded = prettyWithFold(node.value, foldDepth, FLAT_VIEW_LIMIT);
     return {
-      markdown: `${header}\n\n\`\`\`json\n${shallow.text}${shallow.truncated ? truncationNote(shallow.full, shallow.text.length) : ""}\n\`\`\``,
+      markdown: `${header}\n\n\`\`\`json\n${folded.text}${folded.truncated ? truncationNote(folded.fullChars, folded.text.length) : ""}\n\`\`\``,
       fullPretty: pretty(node.value),
     };
-  }, [node, pathStr]);
+  }, [node, pathStr, foldDepth, valueMaxDepth, isContainer, effectiveDepth]);
+
+  const canFoldDeeper = isContainer && effectiveDepth > 1;
+  const canUnfold = isContainer && foldDepth !== undefined && foldDepth < valueMaxDepth;
 
   return (
     <Detail
@@ -259,6 +268,44 @@ function FlatJsonDetail({
               icon={Icon.Pencil}
               shortcut={{ modifiers: ["cmd"], key: "e" }}
               onAction={onEditRequest}
+            />
+          )}
+          {canFoldDeeper && (
+            <Action
+              title="Fold One Level"
+              icon={Icon.ChevronUp}
+              shortcut={{ modifiers: ["cmd"], key: "[" }}
+              onAction={() => setFoldDepth(Math.max(1, effectiveDepth - 1))}
+            />
+          )}
+          {canUnfold && (
+            <Action
+              title="Unfold One Level"
+              icon={Icon.ChevronDown}
+              shortcut={{ modifiers: ["cmd"], key: "]" }}
+              onAction={() =>
+                setFoldDepth((d) => {
+                  if (d === undefined) return undefined;
+                  const next = d + 1;
+                  return next >= valueMaxDepth ? undefined : next;
+                })
+              }
+            />
+          )}
+          {isContainer && valueMaxDepth > 1 && (
+            <Action
+              title="Fold All"
+              icon={Icon.Minimize}
+              shortcut={{ modifiers: ["cmd", "shift"], key: "[" }}
+              onAction={() => setFoldDepth(1)}
+            />
+          )}
+          {isContainer && foldDepth !== undefined && (
+            <Action
+              title="Unfold All"
+              icon={Icon.Maximize}
+              shortcut={{ modifiers: ["cmd", "shift"], key: "]" }}
+              onAction={() => setFoldDepth(undefined)}
             />
           )}
           <Action.CopyToClipboard title="Copy Full Pretty" content={fullPretty} />
@@ -277,6 +324,69 @@ function FlatJsonDetail({
       }
     />
   );
+}
+
+// Depth-based fold for the flat preview. Editor-style per-key fold isn't
+// possible in Raycast's static markdown (no cursor / no click targets), so we
+// instead let the user collapse by container depth. A folded container renders
+// like `{ /* 5 keys */ }` or `[ /* 12 items */ ]`.
+interface FoldedPrettyResult {
+  text: string;
+  truncated: boolean;
+  fullChars: number;
+}
+
+function prettyWithFold(value: unknown, maxDepth: number | undefined, maxLen: number): FoldedPrettyResult {
+  const full = renderFold(value, maxDepth, 0);
+  const fullChars = full.length;
+  const { text, truncated } = truncateForPreview(full, maxLen);
+  return { text, truncated, fullChars };
+}
+
+function renderFold(value: unknown, maxDepth: number | undefined, currentDepth: number): string {
+  if (Array.isArray(value)) {
+    if (value.length === 0) return "[]";
+    if (maxDepth !== undefined && currentDepth >= maxDepth) {
+      return `[ /* ${value.length} item${value.length === 1 ? "" : "s"} */ ]`;
+    }
+    const parts = value.map((v) => indentRest(renderFold(v, maxDepth, currentDepth + 1)));
+    return `[\n  ${parts.join(",\n  ")}\n]`;
+  }
+  if (value && typeof value === "object") {
+    const obj = value as Record<string, unknown>;
+    const keys = Object.keys(obj);
+    if (keys.length === 0) return "{}";
+    if (maxDepth !== undefined && currentDepth >= maxDepth) {
+      return `{ /* ${keys.length} key${keys.length === 1 ? "" : "s"} */ }`;
+    }
+    const parts = keys.map((k) => `${JSON.stringify(k)}: ${indentRest(renderFold(obj[k], maxDepth, currentDepth + 1))}`);
+    return `{\n  ${parts.join(",\n  ")}\n}`;
+  }
+  return JSON.stringify(value, null, 2);
+}
+
+// Pretty parts produced by renderFold already start at column 0; indent every
+// non-first line so they nest correctly inside the parent's two-space indent.
+function indentRest(s: string): string {
+  return s.replace(/\n/g, "\n  ");
+}
+
+function maxDepthOf(value: unknown): number {
+  if (Array.isArray(value)) {
+    if (value.length === 0) return 1;
+    let m = 0;
+    for (const v of value) m = Math.max(m, maxDepthOf(v));
+    return 1 + m;
+  }
+  if (value && typeof value === "object") {
+    const obj = value as Record<string, unknown>;
+    const keys = Object.keys(obj);
+    if (keys.length === 0) return 1;
+    let m = 0;
+    for (const k of keys) m = Math.max(m, maxDepthOf(obj[k]));
+    return 1 + m;
+  }
+  return 0;
 }
 
 export function buildDetailMarkdown(node: ParsedNode, pathStr: string): string {

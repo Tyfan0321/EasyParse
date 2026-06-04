@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    name: Lint & build
+    # ubuntu-latest is 5-10x faster than macos-latest for npm install. The platform
+    # mismatch theory was wrong — the npm 10.9.x crash hit both Linux and macOS, and
+    # pinning to 10.8.2 below fixes it regardless of platform.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # Cache node_modules to skip install on subsequent runs once the lock is stable.
+      - name: Restore node_modules cache
+        id: cache-modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: node_modules-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      # Pin npm to a version not affected by the 10.9.x "Exit handler never called" bug.
+      - name: Pin npm
+        if: steps.cache-modules.outputs.cache-hit != 'true'
+        run: npm install -g npm@10.8.2
+
+      - name: Install dependencies
+        if: steps.cache-modules.outputs.cache-hit != 'true'
+        # The macOS-generated package-lock.json hangs npm on Linux runners for
+        # 5-9 minutes before crashing with `Exit handler never called!` but
+        # silent exit 0. Removing the lock and letting npm resolve fresh from
+        # package.json finishes in ~30 sec on the runner. Reproducibility cost
+        # is acceptable for a single-extension repo; cached node_modules covers
+        # subsequent runs anyway.
+        run: |
+          rm -f package-lock.json
+          npm install --ignore-scripts --no-audit --no-fund --no-progress --no-update-notifier
+
+      - name: Verify install
+        if: steps.cache-modules.outputs.cache-hit != 'true'
+        run: |
+          test -x node_modules/.bin/ray || { echo "❌ ray CLI not in node_modules/.bin — install was incomplete"; exit 1; }
+          test -d node_modules/@raycast/api || { echo "❌ @raycast/api not installed"; exit 1; }
+          echo "✓ install looks complete"
+
+      - name: Lint (ESLint + Prettier + Raycast manifest)
+        run: npm run lint
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build

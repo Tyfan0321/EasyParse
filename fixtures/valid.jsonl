@@ -1,0 +1,4 @@
+{"id":1,"event":"login","user":"ada","ts":"2026-06-01T09:00:00Z"}
+{"id":2,"event":"view","user":"ada","ts":"2026-06-01T09:00:12Z","page":"/dashboard"}
+{"id":3,"event":"export","user":"ada","ts":"2026-06-01T09:01:45Z","rows":1024}
+{"id":4,"event":"logout","user":"ada","ts":"2026-06-01T09:30:00Z"}

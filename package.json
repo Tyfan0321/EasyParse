@@ -1,0 +1,114 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "easy-parse",
+  "title": "Easy Parse",
+  "description": "Auto-detect and structure JSON / JSONL from clipboard, selection, or manual input.",
+  "icon": "command-icon.png",
+  "author": "vann",
+  "categories": [
+    "Developer Tools"
+  ],
+  "license": "MIT",
+  "commands": [
+    {
+      "name": "parse-clipboard",
+      "title": "Parse Clipboard",
+      "subtitle": "Easy Parse",
+      "description": "Auto-detect and structure JSON / JSONL from clipboard",
+      "mode": "view"
+    },
+    {
+      "name": "parse-input",
+      "title": "Parse Input",
+      "subtitle": "Easy Parse",
+      "description": "Open an editor to paste or type JSON / JSONL, then parse it",
+      "mode": "view"
+    }
+  ],
+  "preferences": [
+    {
+      "name": "maxBytes",
+      "type": "textfield",
+      "default": "5242880",
+      "title": "Max input size (bytes)",
+      "description": "Inputs larger than this are truncated in the preview (5 MB by default).",
+      "required": false
+    },
+    {
+      "name": "autoRepair",
+      "type": "checkbox",
+      "default": false,
+      "title": "Lenient repair",
+      "label": "Auto-apply lenient repair on parse error",
+      "description": "When enabled, parse errors are silently retried via jsonrepair.",
+      "required": false
+    },
+    {
+      "name": "historyEnabled",
+      "type": "checkbox",
+      "default": true,
+      "title": "Clipboard history",
+      "label": "Remember the last few parsed clipboards",
+      "description": "When enabled, successful parses are cached so you can switch back with ⌘⇧H.",
+      "required": false
+    },
+    {
+      "name": "historyMaxEntries",
+      "type": "textfield",
+      "default": "5",
+      "title": "History size",
+      "description": "Maximum number of clipboard entries to keep (1-50).",
+      "required": false
+    },
+    {
+      "name": "historyMaxBytes",
+      "type": "textfield",
+      "default": "100000",
+      "title": "History entry size limit (bytes)",
+      "description": "Clipboard payloads larger than this are not added to history (~100 KB by default).",
+      "required": false
+    },
+    {
+      "name": "pathStyle",
+      "type": "dropdown",
+      "default": "jsonpath",
+      "title": "Default path copy format",
+      "description": "Format used when copying a node's path.",
+      "required": false,
+      "data": [
+        {
+          "title": "JSONPath ($.a.b[0])",
+          "value": "jsonpath"
+        },
+        {
+          "title": "Bracket ([\"a\"][\"b\"][0])",
+          "value": "bracket"
+        },
+        {
+          "title": "Dot (a.b.0)",
+          "value": "dot"
+        }
+      ]
+    }
+  ],
+  "dependencies": {
+    "@raycast/api": "^1.81.2",
+    "@raycast/utils": "^1.16.5",
+    "jsonrepair": "^3.8.0"
+  },
+  "devDependencies": {
+    "@raycast/eslint-config": "^1.0.11",
+    "@types/node": "^22.5.0",
+    "@types/react": "^19.0.0",
+    "eslint": "^8.57.0",
+    "prettier": "^3.3.3",
+    "typescript": "^5.5.4"
+  },
+  "scripts": {
+    "build": "ray build -e dist",
+    "dev": "ray develop",
+    "fix-lint": "ray lint --fix",
+    "lint": "ray lint",
+    "publish": "npx @raycast/api@latest publish"
+  }
+}

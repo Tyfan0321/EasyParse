@@ -1,0 +1,12 @@
+{
+  "id": 42,
+  "name": "Ada Lovelace",
+  "active": true,
+  "tags": ["mathematician", "programmer", "countess"],
+  "address": {
+    "street": "10 St James's Square",
+    "city": "London",
+    "country": "UK"
+  },
+  "metadata": null
+}

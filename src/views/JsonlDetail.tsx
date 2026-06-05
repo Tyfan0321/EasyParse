@@ -173,7 +173,7 @@ function LineItem({
             <Action
               title="Re-read Input Source"
               icon={Icon.ArrowClockwise}
-              shortcut={{ modifiers: ["cmd", "opt"], key: "v" }}
+              shortcut={{ modifiers: ["cmd", "shift"], key: "v" }}
               onAction={() => void onRefresh()}
             />
           </ActionPanel>
@@ -235,7 +235,7 @@ function LineItem({
             <Action
               title="Re-read Input Source"
               icon={Icon.ArrowClockwise}
-              shortcut={{ modifiers: ["cmd", "opt"], key: "v" }}
+              shortcut={{ modifiers: ["cmd", "shift"], key: "v" }}
               onAction={() => void onRefresh()}
             />
           </ActionPanel.Section>

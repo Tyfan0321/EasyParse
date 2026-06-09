@@ -102,6 +102,23 @@ function buildSummary(openLine: string, region: FoldRegion): string {
   return `${openLine} /* ${label} */ ${closeBracket}${comma}`;
 }
 
+export function buildFoldedPreview(visibleLines: VisibleLine[], maxLen: number): string {
+  const lines: string[] = [];
+  let len = 0;
+  for (const vl of visibleLines) {
+    const numStr = String(vl.originalIndex + 1).padStart(4, " ");
+    const chevron = vl.foldable ? (vl.folded ? ">" : "v") : " ";
+    const row = `${numStr} ${chevron} ${vl.text}`;
+    if (len + row.length + 1 > maxLen) {
+      lines.push("     ... truncated");
+      break;
+    }
+    lines.push(row);
+    len += row.length + 1;
+  }
+  return lines.join("\n");
+}
+
 const NBSP = String.fromCharCode(160);
 
 export function toNbspIndent(text: string): string {

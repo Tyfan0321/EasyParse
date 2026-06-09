@@ -2,11 +2,12 @@ import { useCallback, useMemo, useState } from "react";
 import { Action, ActionPanel, Color, Detail, Icon, List, useNavigation } from "@raycast/api";
 import { ParsedNode } from "../types";
 import { minified, pretty, truncateForPreview } from "../lib/format";
-import { computeFoldRegions, buildVisibleLines, toNbspIndent, VisibleLine } from "../lib/fold";
+import { computeFoldRegions, buildVisibleLines, buildFoldedPreview, toNbspIndent, VisibleLine } from "../lib/fold";
 import { NodeViewCtx } from "./JsonNodeView";
 import { HistorySubmenu } from "./HistorySubmenu";
 
 const MAX_FOLD_LINES = 5000;
+const DETAIL_PREVIEW_LIMIT = 80_000;
 const STRING_PREVIEW_LIMIT = 100_000;
 
 interface Props {
@@ -37,6 +38,11 @@ export function FoldableJsonList({ node, pathStr, navigationTitle, ctx }: Props)
 
   const visibleLines = useMemo(() => buildVisibleLines(allLines, regions, folded), [allLines, regions, folded]);
 
+  const detailMarkdown = useMemo(() => {
+    const preview = buildFoldedPreview(visibleLines, DETAIL_PREVIEW_LIMIT);
+    return `\`\`\`json\n${preview}\n\`\`\``;
+  }, [visibleLines]);
+
   const toggleFold = useCallback((startLine: number) => {
     setFolded((prev) => {
       const next = new Set(prev);
@@ -59,12 +65,13 @@ export function FoldableJsonList({ node, pathStr, navigationTitle, ctx }: Props)
   const placeholder = `Search ${totalLineCount} lines · ${pathStr || "$"} · ${meta}`;
 
   return (
-    <List navigationTitle={navigationTitle} searchBarPlaceholder={placeholder}>
+    <List isShowingDetail navigationTitle={navigationTitle} searchBarPlaceholder={placeholder}>
       {visibleLines.map((line) => (
         <FoldLineItem
           key={line.originalIndex}
           line={line}
           allLines={allLines}
+          detailMarkdown={detailMarkdown}
           onToggleFold={toggleFold}
           onFoldAll={foldAll}
           onUnfoldAll={unfoldAll}
@@ -80,6 +87,7 @@ export function FoldableJsonList({ node, pathStr, navigationTitle, ctx }: Props)
           title="… truncated"
           subtitle={`Showing first ${MAX_FOLD_LINES} of ${totalLineCount} lines`}
           icon={{ source: Icon.Warning, tintColor: Color.Yellow }}
+          detail={<List.Item.Detail markdown={detailMarkdown} />}
           actions={
             <ActionPanel>
               <Action.CopyToClipboard title="Copy Full Pretty" content={fullPretty} />
@@ -94,6 +102,7 @@ export function FoldableJsonList({ node, pathStr, navigationTitle, ctx }: Props)
 function FoldLineItem({
   line,
   allLines,
+  detailMarkdown,
   onToggleFold,
   onFoldAll,
   onUnfoldAll,
@@ -105,6 +114,7 @@ function FoldLineItem({
 }: {
   line: VisibleLine;
   allLines: string[];
+  detailMarkdown: string;
   onToggleFold: (startLine: number) => void;
   onFoldAll: () => void;
   onUnfoldAll: () => void;
@@ -127,6 +137,7 @@ function FoldLineItem({
       title={toNbspIndent(line.text)}
       accessories={[{ text: { value: String(line.originalIndex + 1), color: Color.SecondaryText } }]}
       keywords={[line.text.trim()]}
+      detail={<List.Item.Detail markdown={detailMarkdown} />}
       actions={
         <ActionPanel>
           {line.foldable ? (

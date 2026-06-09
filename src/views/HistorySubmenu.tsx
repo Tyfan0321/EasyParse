@@ -15,7 +15,7 @@ export function HistorySubmenu({ history, selectedEntryId, onSelectEntry, onAfte
     <ActionPanel.Submenu
       title={`Switch History (${history.length})`}
       icon={Icon.Clock}
-      shortcut={{ modifiers: ["cmd", "shift"], key: "h" }}
+      shortcut={{ modifiers: ["cmd"], key: "h" }}
     >
       {history.map((entry) => (
         <Action

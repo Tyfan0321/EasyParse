@@ -1,13 +1,13 @@
-import { useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { Action, ActionPanel, Color, Detail, Icon, List, useNavigation } from "@raycast/api";
-import { ParsedNode } from "../types";
+import { ParsedNode, NodeKind } from "../types";
 import { minified, pretty, truncateForPreview } from "../lib/format";
-import { computeFoldRegions, buildVisibleLines, buildFoldedPreview, toNbspIndent, VisibleLine } from "../lib/fold";
-import { NodeViewCtx } from "./JsonNodeView";
+import { computeFoldRegions, buildVisibleLines, buildFoldedPreview, extractKeyLabel, VisibleLine } from "../lib/fold";
+import { NodeViewCtx, iconForKind } from "./JsonNodeView";
 import { HistorySubmenu } from "./HistorySubmenu";
 
-const MAX_FOLD_LINES = 5000;
-const DETAIL_PREVIEW_LIMIT = 80_000;
+const MAX_FOLD_LINES = 2000;
+const DETAIL_PREVIEW_LIMIT = 40_000;
 const STRING_PREVIEW_LIMIT = 100_000;
 
 interface Props {
@@ -15,6 +15,14 @@ interface Props {
   pathStr: string;
   navigationTitle: string;
   ctx: NodeViewCtx;
+}
+
+interface KeyItem {
+  line: VisibleLine;
+  label: string;
+  depth: number;
+  valueKind: NodeKind;
+  childCount?: number;
 }
 
 export function FoldableJsonList({ node, pathStr, navigationTitle, ctx }: Props) {
@@ -35,6 +43,7 @@ export function FoldableJsonList({ node, pathStr, navigationTitle, ctx }: Props)
   }, [node.value]);
 
   const regions = useMemo(() => computeFoldRegions(allLines), [allLines]);
+  const regionByStart = useMemo(() => new Map(regions.map((r) => [r.startLine, r])), [regions]);
 
   const visibleLines = useMemo(() => buildVisibleLines(allLines, regions, folded), [allLines, regions, folded]);
 
@@ -60,23 +69,61 @@ export function FoldableJsonList({ node, pathStr, navigationTitle, ctx }: Props)
     setFolded(new Set());
   }, []);
 
-  const fullPretty = useMemo(() => pretty(node.value), [node.value]);
+  const fullPrettyRef = useRef<string>("");
+  const fullPretty = useMemo(() => {
+    const v = pretty(node.value);
+    fullPrettyRef.current = v;
+    return v;
+  }, [node.value]);
+
   const meta = `${node.kind} · ${node.childCount} ${node.kind === "array" ? "items" : "keys"}`;
   const placeholder = `Search ${totalLineCount} lines · ${pathStr || "$"} · ${meta}`;
 
+  const keyItems = useMemo(() => {
+    const items: KeyItem[] = [];
+    for (const vl of visibleLines) {
+      const label = extractKeyLabel(vl);
+      if (label === null) continue;
+      const indent = vl.text.length - vl.text.trimStart().length;
+      const depth = Math.floor(indent / 2);
+      const region = regionByStart.get(vl.originalIndex);
+
+      const afterKey = vl.text
+        .trimStart()
+        .replace(/^"[^"]*":\s*/, "")
+        .replace(/,\s*$/, "");
+
+      let valueKind: NodeKind;
+      let childCount: number | undefined;
+
+      if (region) {
+        valueKind = region.containerKind;
+        childCount = region.childCount;
+      } else {
+        valueKind = guessKind(afterKey);
+      }
+
+      items.push({ line: vl, label, depth, valueKind, childCount });
+    }
+    return items;
+  }, [visibleLines, regionByStart]);
+
   return (
     <List isShowingDetail navigationTitle={navigationTitle} searchBarPlaceholder={placeholder}>
-      {visibleLines.map((line) => (
-        <FoldLineItem
-          key={line.originalIndex}
-          line={line}
-          allLines={allLines}
+      {keyItems.map((item) => (
+        <MemoizedFoldLineItem
+          key={item.line.originalIndex}
+          item={item}
           detailMarkdown={detailMarkdown}
           onToggleFold={toggleFold}
           onFoldAll={foldAll}
           onUnfoldAll={unfoldAll}
           onPop={pop}
-          ctx={ctx}
+          onEditRequest={ctx.onEditRequest}
+          history={ctx.history}
+          selectedEntryId={ctx.selectedEntryId}
+          onSelectEntry={ctx.onSelectEntry}
+          onAfterHistoryCleared={ctx.onAfterHistoryCleared}
           fullPretty={fullPretty}
           nodeValue={node.value}
           hasFoldRegions={regions.length > 0}
@@ -99,71 +146,86 @@ export function FoldableJsonList({ node, pathStr, navigationTitle, ctx }: Props)
   );
 }
 
+const MemoizedFoldLineItem = memo(FoldLineItem, (prev, next) => {
+  return (
+    prev.item.line.originalIndex === next.item.line.originalIndex &&
+    prev.item.line.folded === next.item.line.folded &&
+    prev.item.label === next.item.label &&
+    prev.item.depth === next.item.depth &&
+    prev.detailMarkdown === next.detailMarkdown &&
+    prev.hasFoldRegions === next.hasFoldRegions
+  );
+});
+
 function FoldLineItem({
-  line,
-  allLines,
+  item,
   detailMarkdown,
   onToggleFold,
   onFoldAll,
   onUnfoldAll,
   onPop,
-  ctx,
+  onEditRequest,
+  history,
+  selectedEntryId,
+  onSelectEntry,
+  onAfterHistoryCleared,
   fullPretty,
   nodeValue,
   hasFoldRegions,
 }: {
-  line: VisibleLine;
-  allLines: string[];
+  item: KeyItem;
   detailMarkdown: string;
   onToggleFold: (startLine: number) => void;
   onFoldAll: () => void;
   onUnfoldAll: () => void;
   onPop: () => void;
-  ctx: NodeViewCtx;
+  onEditRequest: () => void;
+  history?: import("../lib/history").HistoryEntry[];
+  selectedEntryId?: string;
+  onSelectEntry?: (id: string) => void;
+  onAfterHistoryCleared?: () => void;
   fullPretty: string;
   nodeValue: unknown;
   hasFoldRegions: boolean;
 }) {
-  const icon = line.foldable
-    ? line.folded
-      ? { source: Icon.ChevronRight, tintColor: Color.SecondaryText }
-      : { source: Icon.ChevronDown, tintColor: Color.SecondaryText }
-    : { source: Icon.Dot, tintColor: Color.SecondaryText };
+  const { line, label, depth, valueKind, childCount } = item;
+  const isContainer = valueKind === "object" || valueKind === "array";
+
+  const depthTag = `L${depth}`;
+
+  const accessories: List.Item.Accessory[] = [
+    { tag: { value: depthTag, color: Color.SecondaryText } },
+    ...(isContainer && childCount !== undefined ? [{ text: String(childCount) }] : []),
+    ...(line.foldable ? [{ icon: line.folded ? Icon.ChevronRight : Icon.ChevronDown }] : []),
+  ];
 
   return (
     <List.Item
       id={String(line.originalIndex)}
-      icon={icon}
-      title={toNbspIndent(line.text)}
-      accessories={[{ text: { value: String(line.originalIndex + 1), color: Color.SecondaryText } }]}
-      keywords={[line.text.trim()]}
+      icon={iconForKind(valueKind)}
+      title={label}
+      accessories={accessories}
+      keywords={[label, depthTag]}
       detail={<List.Item.Detail markdown={detailMarkdown} />}
       actions={
         <ActionPanel>
-          {line.foldable ? (
+          {line.foldable && (
             <Action
               title={line.folded ? "Unfold" : "Fold"}
               icon={line.folded ? Icon.ChevronDown : Icon.ChevronRight}
               onAction={() => onToggleFold(line.originalIndex)}
             />
-          ) : (
-            <Action.CopyToClipboard title="Copy Line" content={allLines[line.originalIndex]} />
           )}
           <Action
             title="Edit Input"
             icon={Icon.Pencil}
             shortcut={{ modifiers: ["cmd"], key: "e" }}
-            onAction={ctx.onEditRequest}
-          />
-          <Action.CopyToClipboard
-            title="Copy Line"
-            content={allLines[line.originalIndex]}
-            shortcut={{ modifiers: ["cmd"], key: "c" }}
+            onAction={onEditRequest}
           />
           <Action.CopyToClipboard
             title="Copy Full Pretty"
             content={fullPretty}
-            shortcut={{ modifiers: ["cmd", "shift"], key: "c" }}
+            shortcut={{ modifiers: ["cmd"], key: "c" }}
           />
           {hasFoldRegions && (
             <ActionPanel.Section title="Folding">
@@ -190,10 +252,10 @@ function FoldLineItem({
               onAction={onPop}
             />
             <HistorySubmenu
-              history={ctx.history}
-              selectedEntryId={ctx.selectedEntryId}
-              onSelectEntry={ctx.onSelectEntry}
-              onAfterClear={ctx.onAfterHistoryCleared}
+              history={history}
+              selectedEntryId={selectedEntryId}
+              onSelectEntry={onSelectEntry}
+              onAfterClear={onAfterHistoryCleared}
             />
           </ActionPanel.Section>
         </ActionPanel>
@@ -237,4 +299,14 @@ function StringFallbackDetail({ node, pathStr, navigationTitle, ctx }: Props) {
       }
     />
   );
+}
+
+function guessKind(raw: string): NodeKind {
+  if (raw === "null") return "null";
+  if (raw === "true" || raw === "false") return "boolean";
+  if (raw.startsWith('"')) return "string";
+  if (raw.startsWith("{")) return "object";
+  if (raw.startsWith("[")) return "array";
+  if (/^-?[\d.]/.test(raw)) return "number";
+  return "string";
 }

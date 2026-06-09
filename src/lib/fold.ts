@@ -119,6 +119,27 @@ export function buildFoldedPreview(visibleLines: VisibleLine[], maxLen: number):
   return lines.join("\n");
 }
 
+export function extractKeyLabel(line: VisibleLine): string | null {
+  const text = line.text.trimStart();
+  if (!text) return null;
+
+  // Closing brackets — skip entirely
+  if (text.startsWith("}") || text.startsWith("]")) return null;
+
+  // Root-level opening bracket — show as $ root
+  if ((text === "{" || text === "[") && line.originalIndex === 0) return null;
+
+  // Object key line: "key": value  or  "key": {
+  const keyMatch = text.match(/^"([^"]*)":\s*/);
+  if (keyMatch) {
+    return keyMatch[1];
+  }
+
+  // Array element (no key) — show index-based label
+  // These are lines inside arrays that aren't key-value pairs
+  return null;
+}
+
 const NBSP = String.fromCharCode(160);
 
 export function toNbspIndent(text: string): string {

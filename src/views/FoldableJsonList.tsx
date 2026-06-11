@@ -32,7 +32,18 @@ export function FoldableJsonList({ node, pathStr, navigationTitle, ctx }: Props)
     return <StringFallbackDetail node={node} pathStr={pathStr} navigationTitle={navigationTitle} ctx={ctx} />;
   }
 
-  const [folded, setFolded] = useState<Set<number>>(() => new Set());
+  const [folded, setFolded] = useState<Set<number>>(() => {
+    // Pre-fold regions at depth >= 2 (indent >= 4) for faster initial display
+    const raw = pretty(node.value).split("\n");
+    const capped = raw.length > MAX_FOLD_LINES ? raw.slice(0, MAX_FOLD_LINES) : raw;
+    const regs = computeFoldRegions(capped);
+    const initial = new Set<number>();
+    for (const r of regs) {
+      const indent = capped[r.startLine].length - capped[r.startLine].trimStart().length;
+      if (indent >= 4) initial.add(r.startLine); // depth >= 2
+    }
+    return initial;
+  });
 
   const { allLines, truncated, totalLineCount } = useMemo(() => {
     const raw = pretty(node.value).split("\n");
